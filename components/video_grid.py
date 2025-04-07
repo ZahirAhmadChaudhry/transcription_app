@@ -53,9 +53,12 @@ def _render_video_card(video: Dict, width: int, selected_videos: Set[str]):
 
 def _render_control_buttons(video: Dict, selected_videos: Set[str]):
     """Render Add/Remove buttons."""
+    button_key = f"toggle_{video['id']}"
     if video['id'] in selected_videos:
-        if st.button("Remove", key=f"remove_{video['id']}", type="secondary", use_container_width=True):
+        if st.button("Remove", key=button_key, type="secondary", use_container_width=True):
             selected_videos.remove(video['id'])
+            st.session_state[button_key] = False
     else:
-        if st.button("Add", key=f"add_{video['id']}", use_container_width=True):
+        if st.button("Add", key=button_key, use_container_width=True):
             selected_videos.add(video['id'])
+            st.session_state[button_key] = True
