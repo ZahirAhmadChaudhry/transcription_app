@@ -12,6 +12,8 @@ if 'playlist_videos' not in st.session_state:
     st.session_state['playlist_videos'] = []
 if 'processed_transcripts' not in st.session_state:
     st.session_state['processed_transcripts'] = {}
+if 'processed_videos' not in st.session_state:
+    st.session_state['processed_videos'] = []
 
 def load_playlist():
     """Load and process playlist videos."""
@@ -44,7 +46,7 @@ def process_transcription(video_ids: List[str], source_lang: str, target_lang: s
         return
 
     progress_bar = st.progress(0)
-    processed_videos = []
+    newly_processed = []
     
     for idx, video_id in enumerate(video_ids):
         try:
@@ -53,49 +55,51 @@ def process_transcription(video_ids: List[str], source_lang: str, target_lang: s
             st.write(f"Processing video: {metadata['title']}")
             
             # Check if already processed
-            if video_id in st.session_state['processed_transcripts']:
-                content = st.session_state['processed_transcripts'][video_id]['content']
-                filename = st.session_state['processed_transcripts'][video_id]['filename']
+            existing = next((v for v in st.session_state['processed_videos'] 
+                           if v['id'] == video_id), None)
+            if existing:
+                newly_processed.append(existing)
             else:
                 transcript = get_transcript(video_id, source_lang, target_lang)
                 if transcript:
                     content = format_transcript_content(transcript)
                     filename = f"{sanitize_filename(metadata['title'])}.txt"
-                    # Store in session state
-                    st.session_state['processed_transcripts'][video_id] = {
+                    video_data = {
+                        'id': video_id,
+                        'title': metadata['title'],
                         'content': content,
                         'filename': filename
                     }
+                    newly_processed.append(video_data)
+                    if video_data not in st.session_state['processed_videos']:
+                        st.session_state['processed_videos'].append(video_data)
                 else:
                     st.warning(f"No transcript available for: {metadata['title']}")
-                    continue
             
-            processed_videos.append({
-                'id': video_id,
-                'title': metadata['title'],
-                'content': content,
-                'filename': filename
-            })
             progress_bar.progress((idx + 1) / len(video_ids))
         except Exception as e:
             st.warning(f"Failed to process video {video_id}: {str(e)}")
     
     progress_bar.empty()
-    
-    # Display download buttons for all processed videos
-    st.subheader("Download Transcripts")
-    for video in processed_videos:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.write(video['title'])
-        with col2:
-            st.download_button(
-                label="📥 Download",
-                data=video['content'],
-                file_name=video['filename'],
-                mime="text/plain",
-                key=f"download_{video['id']}_{hash(video['content'])}"
-            )
+    display_processed_videos()
+
+def display_processed_videos():
+    """Display all processed videos with download buttons."""
+    if st.session_state['processed_videos']:
+        st.header("Download Transcripts")
+        for video in st.session_state['processed_videos']:
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(video['title'])
+                with col2:
+                    st.download_button(
+                        label="📥 Download",
+                        data=video['content'],
+                        file_name=video['filename'],
+                        mime="text/plain",
+                        key=f"dl_{video['id']}_{hash(video['content'])}"
+                    )
 
 def process_single_video(video_id: str, source_lang: str, target_lang: str):
     """Handle single video transcription."""
@@ -107,30 +111,27 @@ def process_single_video(video_id: str, source_lang: str, target_lang: str):
         st.write(f"Processing video: {metadata['title']}")
         
         # Check if already processed
-        if video_id in st.session_state['processed_transcripts']:
-            content = st.session_state['processed_transcripts'][video_id]['content']
-            filename = st.session_state['processed_transcripts'][video_id]['filename']
+        existing = next((v for v in st.session_state['processed_videos'] 
+                        if v['id'] == video_id), None)
+        if existing:
+            video_data = existing
         else:
             transcript = get_transcript(video_id, source_lang, target_lang)
             if transcript:
                 content = format_transcript_content(transcript)
                 filename = f"{sanitize_filename(metadata['title'])}.txt"
-                # Store in session state
-                st.session_state['processed_transcripts'][video_id] = {
+                video_data = {
+                    'id': video_id,
+                    'title': metadata['title'],
                     'content': content,
                     'filename': filename
                 }
+                st.session_state['processed_videos'].append(video_data)
             else:
                 st.warning(f"No transcript available for this video")
                 return
         
-        st.download_button(
-            label="📥 Download Transcript",
-            data=content,
-            file_name=filename,
-            mime="text/plain",
-            key=f"download_{video_id}_{hash(content)}"
-        )
+        display_processed_videos()
         st.success(f"Transcript ready for: {metadata['title']}")
             
     except Exception as e:
