@@ -69,7 +69,7 @@ def process_transcription(video_ids: List[str], save_folder: str, source_lang: s
     progress_bar.empty()
 
 def process_single_video(video_id: str, save_folder: str, source_lang: str, target_lang: str):
-    """Handle single video transcription with proper metadata handling."""
+    """Handle single video transcription with download option."""
     try:
         # Get video metadata
         metadata = get_video_metadata(video_id)
@@ -78,12 +78,24 @@ def process_single_video(video_id: str, save_folder: str, source_lang: str, targ
             
         st.write(f"Processing video: {metadata['title']}")
         
-        # Fetch and save transcript
+        # Fetch transcript
         transcript = get_transcript(video_id, source_lang, target_lang)
         if transcript:
-            save_path = os.path.join(save_folder, f"{sanitize_filename(metadata['title'])}.txt")
-            save_transcript_with_timestamps(transcript, save_path)
-            st.success(f"Saved transcript for: {metadata['title']}")
+            # Prepare transcript content
+            content = ""
+            for entry in transcript:
+                timestamp = format_timestamp(entry['start'], entry['duration'])
+                content += f"{timestamp}{entry['text']}\n"
+            
+            # Create download button
+            filename = f"{sanitize_filename(metadata['title'])}.txt"
+            st.download_button(
+                label="📥 Download Transcript",
+                data=content,
+                file_name=filename,
+                mime="text/plain"
+            )
+            st.success(f"Transcript ready for: {metadata['title']}")
         else:
             st.warning(f"No transcript available for this video")
             
