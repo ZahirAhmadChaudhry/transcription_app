@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.file_utils import sanitize_filename, format_transcript_content
+from utils.file_utils import sanitize_filename, format_transcript_content, create_zip_content
 from utils.youtube_utils import extract_video_id, get_video_metadata
 from components.video_grid import show_video_grid
 from utils.transcription import get_transcript
@@ -84,9 +84,26 @@ def process_transcription(video_ids: List[str], source_lang: str, target_lang: s
     display_processed_videos()
 
 def display_processed_videos():
-    """Display all processed videos with download buttons."""
-    if st.session_state['processed_videos']:
-        st.header("Download Transcripts")
+    """Display processed videos with appropriate download options."""
+    if not st.session_state['processed_videos']:
+        return
+        
+    st.header("Download Transcripts")
+    
+    # Single video - direct download
+    if len(st.session_state['processed_videos']) == 1:
+        video = st.session_state['processed_videos'][0]
+        st.download_button(
+            label="📥 Download Transcript",
+            data=video['content'],
+            file_name=video['filename'],
+            mime="text/plain",
+            key=f"dl_{video['id']}"
+        )
+        
+    # Multiple videos - zip download
+    else:
+        # Show individual download buttons
         for video in st.session_state['processed_videos']:
             with st.container():
                 col1, col2 = st.columns([3, 1])
@@ -94,12 +111,24 @@ def display_processed_videos():
                     st.write(video['title'])
                 with col2:
                     st.download_button(
-                        label="📥 Download",
+                        label="📥",
                         data=video['content'],
                         file_name=video['filename'],
                         mime="text/plain",
                         key=f"dl_{video['id']}_{hash(video['content'])}"
                     )
+        
+        # Add zip download option
+        st.divider()
+        zip_data, zip_name = create_zip_content(st.session_state['processed_videos'])
+        st.download_button(
+            label="📥 Download All Transcripts as ZIP",
+            data=zip_data,
+            file_name=zip_name,
+            mime="application/zip",
+            key="download_all_zip",
+            use_container_width=True
+        )
 
 def process_single_video(video_id: str, source_lang: str, target_lang: str):
     """Handle single video transcription."""
