@@ -1,15 +1,11 @@
 import streamlit as st
-import os
-from utils.file_utils import sanitize_filename, validate_save_location, select_folder
-from utils.youtube_utils import extract_video_id, get_video_metadata, fetch_transcript
+from utils.file_utils import sanitize_filename, format_transcript_content
+from utils.youtube_utils import extract_video_id, get_video_metadata
 from components.video_grid import show_video_grid
-from utils.transcription import get_transcript, save_transcript_with_timestamps
+from utils.transcription import get_transcript
 from typing import List, Dict, Set
-import time
 
 # Initialize session states
-if 'folder_path' not in st.session_state:
-    st.session_state['folder_path'] = ''
 if 'selected_videos' not in st.session_state:
     st.session_state['selected_videos'] = set()
 if 'playlist_videos' not in st.session_state:
@@ -39,7 +35,7 @@ def load_playlist():
             except Exception as e:
                 st.error(f"Failed to load playlist: {str(e)}")
 
-def process_transcription(video_ids: List[str], save_folder: str, source_lang: str, target_lang: str):
+def process_transcription(video_ids: List[str], source_lang: str, target_lang: str):
     """Process transcription for selected videos."""
     if not video_ids:
         st.warning("Please select videos to transcribe")
@@ -48,17 +44,22 @@ def process_transcription(video_ids: List[str], save_folder: str, source_lang: s
     progress_bar = st.progress(0)
     for idx, video_id in enumerate(video_ids):
         try:
-            # Get video metadata
             metadata = next(v for v in st.session_state['playlist_videos'] 
                           if v['id'] == video_id)
             st.write(f"Processing video: {metadata['title']}")
             
-            # Fetch and save transcript
             transcript = get_transcript(video_id, source_lang, target_lang)
             if transcript:
-                save_path = os.path.join(save_folder, f"{sanitize_filename(metadata['title'])}.txt")
-                save_transcript_with_timestamps(transcript, save_path)
-                st.success(f"Saved transcript for: {metadata['title']}")
+                content = format_transcript_content(transcript)
+                filename = f"{sanitize_filename(metadata['title'])}.txt"
+                
+                st.download_button(
+                    label=f"📥 Download {metadata['title']}",
+                    data=content,
+                    file_name=filename,
+                    mime="text/plain",
+                    key=f"download_{video_id}"
+                )
             else:
                 st.warning(f"No transcript available for: {metadata['title']}")
             
@@ -68,27 +69,20 @@ def process_transcription(video_ids: List[str], save_folder: str, source_lang: s
     
     progress_bar.empty()
 
-def process_single_video(video_id: str, save_folder: str, source_lang: str, target_lang: str):
-    """Handle single video transcription with download option."""
+def process_single_video(video_id: str, source_lang: str, target_lang: str):
+    """Handle single video transcription."""
     try:
-        # Get video metadata
         metadata = get_video_metadata(video_id)
         if not metadata:
             raise Exception("Could not fetch video metadata")
             
         st.write(f"Processing video: {metadata['title']}")
         
-        # Fetch transcript
         transcript = get_transcript(video_id, source_lang, target_lang)
         if transcript:
-            # Prepare transcript content
-            content = ""
-            for entry in transcript:
-                timestamp = format_timestamp(entry['start'], entry['duration'])
-                content += f"{timestamp}{entry['text']}\n"
-            
-            # Create download button
+            content = format_transcript_content(transcript)
             filename = f"{sanitize_filename(metadata['title'])}.txt"
+            
             st.download_button(
                 label="📥 Download Transcript",
                 data=content,
@@ -137,18 +131,7 @@ elif link_type == "Playlist":
 else:
     link = st.text_input("Enter the link:")
 
-# Input for local folder to save transcripts
-st.header("Save Location")
-save_folder = st.text_input("Enter the path where transcripts will be saved:")
-
-if not save_folder:
-    st.info("Please enter a folder path to save transcripts")
-elif not os.path.exists(save_folder):
-    st.error("The specified folder does not exist")
-elif not os.access(save_folder, os.W_OK):
-    st.error("Cannot write to the specified folder. Please check permissions")
-
-# Input for language selection
+# Language selection
 st.header("Language Options")
 col1, col2 = st.columns(2)
 with col1:
@@ -158,16 +141,14 @@ with col2:
 
 # Process button
 if st.button("Start Transcription"):
-    if not link or not save_folder:
-        st.error("Please provide both the link(s) and the save folder.")
-    elif not os.path.exists(save_folder):
-        st.error("The specified folder does not exist. Please provide a valid folder path.")
+    if not link:
+        st.error("Please provide a video or playlist link.")
     else:
         if link_type == "Single Video":
             video_id = extract_video_id(link)
-            process_single_video(video_id, save_folder, source_lang, target_lang)
+            process_single_video(video_id, source_lang, target_lang)
         elif link_type == "Multiple Videos":
             video_ids = [extract_video_id(l) for l in link.splitlines() if l.strip()]
-            process_transcription(video_ids, save_folder, source_lang, target_lang)
+            process_transcription(video_ids, source_lang, target_lang)
         elif link_type == "Playlist":
-            process_transcription(list(st.session_state['selected_videos']), save_folder, source_lang, target_lang)
+            process_transcription(list(st.session_state['selected_videos']), source_lang, target_lang)
