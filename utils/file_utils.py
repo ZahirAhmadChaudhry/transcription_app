@@ -19,4 +19,25 @@ def validate_save_location(path: str) -> bool:
     """
     Validate if save location exists and is writable.
     """
-    return os.path.exists(path) and os.access(path, os.W_OK)
+    try:
+        os.makedirs(path, exist_ok=True)
+        return os.path.exists(path) and os.access(path, os.W_OK)
+    except:
+        return False
+
+def select_folder(initial_dir: str = None) -> str:
+    """
+    Cloud-compatible folder selection.
+    For cloud deployment, this just returns the input path or a default.
+    
+    Args:
+        initial_dir: Initial directory path
+    Returns:
+        Selected directory path
+    """
+    # For cloud deployment, we'll just use the provided path or a default
+    if initial_dir and os.path.exists(initial_dir):
+        return initial_dir
+    
+    # Default to a directory that should be writable in cloud environment
+    return os.path.join(os.path.expanduser('~'), 'transcripts')
